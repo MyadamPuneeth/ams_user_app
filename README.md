@@ -25,9 +25,3 @@ npm run check
 ```
 
 `npm test` runs the FastAPI pytest suite against an isolated PostgreSQL database and verifies tenant policies, invitation races, revoked membership and suspension. `npm run test:e2e` verifies the real browser paths and responsive layouts.
-
-## Production configuration
-
-Copy `.env.example` and configure Supabase Auth before setting `DEV_AUTH=false`. The API rejects development authentication in production. Use `MIGRATION_DATABASE_URL` only for database migrations; runtime `DATABASE_URL` must use the restricted `ams_app` PostgreSQL role.
-
-See [.codex/context/status.md](.codex/context/status.md) for the current implementation boundary and the next milestone.

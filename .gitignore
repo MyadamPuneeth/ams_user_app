@@ -13,4 +13,3 @@ test-results/
 __pycache__/
 .pytest_cache/
 .codex/
-.codex/
