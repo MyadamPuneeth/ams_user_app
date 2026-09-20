@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from .auth import AuthService, DEMO_PROFILES, Identity, actor
 from .database import Database
@@ -20,8 +20,10 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.db.close()
 
-app = FastAPI(title="AMS Foundation API", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("WEB_ORIGIN", "http://localhost:5173")], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+production = os.getenv("NODE_ENV") == "production"
+app = FastAPI(title="AMS API", version="0.2.0", docs_url=None if production else "/api/docs", openapi_url=None if production else "/api/openapi.json", lifespan=lifespan)
+origins = [value.strip() for value in os.getenv("WEB_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:5175").split(",") if value.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_exception_handler(ApiError, api_error); app.add_exception_handler(StarletteHTTPException, http_error); app.add_exception_handler(RequestValidationError, validation_error); app.add_exception_handler(Exception, unexpected_error)
 
 @app.middleware("http")
@@ -29,8 +31,8 @@ async def security(request: Request, call_next):
     request.state.request_id = str(uuid4())
     try:
         response = await call_next(request)
-    except SQLAlchemyError:
-        # Constraint and RLS failures are safe conflicts; database details stay private.
+    except IntegrityError:
+        # Constraint failures are safe conflicts; database details stay private.
         response = body(409, "This change is not allowed in the current state.", request)
     response.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer"})
     return response
@@ -71,5 +73,23 @@ async def invite(academy_id: UUID, input: InvitationInput, identity: Identity = 
 async def revoke(academy_id: UUID, invitation_id: UUID, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): await app_service.revoke(identity, academy_id, invitation_id); return Response(status_code=204)
 @app.get("/api/academies/{academy_id}/activity", tags=["academy"], response_model=list[AuditDto])
 async def activity(academy_id: UUID, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.activity(identity, academy_id)
+@app.get("/api/academies/{academy_id}/athletes", tags=["attendance"], response_model=list[AthleteDto])
+async def athletes(academy_id: UUID, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.athletes(identity, academy_id)
+@app.post("/api/academies/{academy_id}/athletes", tags=["attendance"], status_code=201, response_model=AthleteDto)
+async def create_athlete(academy_id: UUID, input: AthleteInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.create_athlete(identity, academy_id, input)
+@app.post("/api/academies/{academy_id}/guardian-links", tags=["attendance"], status_code=204)
+async def guardian_link(academy_id: UUID, input: GuardianLinkInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): await app_service.link_guardian(identity, academy_id, input); return Response(status_code=204)
+@app.get("/api/academies/{academy_id}/sessions", tags=["attendance"], response_model=list[SessionDto])
+async def sessions(academy_id: UUID, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.sessions(identity, academy_id)
+@app.post("/api/academies/{academy_id}/sessions", tags=["attendance"], status_code=201, response_model=SessionDto)
+async def create_session(academy_id: UUID, input: SessionInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.create_session(identity, academy_id, input)
+@app.post("/api/academies/{academy_id}/sessions/{session_id}/roster", tags=["attendance"], status_code=204)
+async def add_roster(academy_id: UUID, session_id: UUID, input: RosterInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): await app_service.add_roster(identity, academy_id, session_id, input.athleteId); return Response(status_code=204)
+@app.put("/api/academies/{academy_id}/sessions/{session_id}/attendance/{athlete_id}", tags=["attendance"], response_model=AttendanceDto)
+async def mark_attendance(academy_id: UUID, session_id: UUID, athlete_id: UUID, input: AttendanceInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.mark_attendance(identity, academy_id, session_id, athlete_id, input, "MANUAL")
+@app.post("/api/academies/{academy_id}/attendance-qr", tags=["attendance"], response_model=QrDto)
+async def create_qr(academy_id: UUID, input: QrInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.create_qr(identity, academy_id, input)
+@app.post("/api/attendance-qr/redeem", tags=["attendance"], response_model=AttendanceDto)
+async def redeem_qr(input: RedeemQrInput, identity: Identity = Depends(actor), app_service: AcademyService = Depends(service)): return await app_service.redeem_qr(identity, input)
 @app.get("/api/health", tags=["health"])
 async def health(): return {"status": "ok"}

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
@@ -86,3 +86,26 @@ class DemoProfileDto(BaseModel): id: UUID; name: str; email: str; label: str
 class AuthConfigDto(BaseModel): demo: bool; profiles: list[DemoProfileDto]
 class TokenDto(BaseModel): accessToken: str
 class AcceptDto(BaseModel): academyId: UUID
+
+class AthleteInput(ApiModel):
+    name: Annotated[str, Field(min_length=2, max_length=100)]
+    membershipId: UUID | None = None
+    _name = field_validator("name", mode="before")(trim)
+class GuardianLinkInput(ApiModel): guardianMembershipId: UUID; athleteId: UUID
+class SessionInput(ApiModel):
+    branchId: UUID; coachMembershipId: UUID | None = None; title: Annotated[str, Field(min_length=2, max_length=120)]
+    startsAt: datetime; endsAt: datetime
+    _title = field_validator("title", mode="before")(trim)
+class RosterInput(ApiModel): athleteId: UUID
+class AttendanceInput(ApiModel):
+    status: Annotated[str, Field(pattern="^(PRESENT|ABSENT|EXCUSED)$")]
+    correctionReason: Annotated[str | None, Field(max_length=300)] = None
+    @field_validator("correctionReason", mode="before")
+    @classmethod
+    def reason(cls, value): return trim(value) if value else None
+class QrInput(ApiModel): kind: Annotated[str, Field(pattern="^(SESSION|STAFF)$")]; branchId: UUID; sessionId: UUID | None = None
+class RedeemQrInput(ApiModel): token: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]; athleteId: UUID | None = None
+class AthleteDto(BaseModel): id: UUID; name: str; membershipId: UUID | None; active: bool
+class SessionDto(BaseModel): id: UUID; branchId: UUID; coachMembershipId: UUID | None; title: str; startsAt: datetime; endsAt: datetime; status: str
+class AttendanceDto(BaseModel): id: UUID; sessionId: UUID | None = None; athleteId: UUID | None = None; membershipId: UUID | None = None; branchId: UUID | None = None; localDate: date | None = None; status: str; source: str; checkedAt: datetime
+class QrDto(BaseModel): token: str; url: str; expiresAt: datetime

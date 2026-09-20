@@ -147,3 +147,15 @@ class TestFoundation:
         try:
             with pytest.raises(RuntimeError, match="DEV_AUTH requires"): AuthService()
         finally: os.environ["NODE_ENV"] = previous
+
+    def test_13_attendance_persists_and_staff_qr_is_idempotent(self, client, tokens):
+        _, athlete = request(client, f"/api/academies/{ACADEMY}/athletes", tokens["admin"], "POST", {"name": "Rhea Iyer"})
+        starts = "2026-09-20T10:00:00Z"; ends = "2026-09-20T11:00:00Z"
+        _, session = request(client, f"/api/academies/{ACADEMY}/sessions", tokens["admin"], "POST", {"branchId": BRANCH, "title": "Morning training", "startsAt": starts, "endsAt": ends})
+        assert request(client, f"/api/academies/{ACADEMY}/sessions/{session['id']}/roster", tokens["admin"], "POST", {"athleteId": athlete["id"]})[0] == 204
+        status, record = request(client, f"/api/academies/{ACADEMY}/sessions/{session['id']}/attendance/{athlete['id']}", tokens["admin"], "PUT", {"status": "PRESENT", "correctionReason": "Arrived on time"})
+        assert status == 200 and record["status"] == "PRESENT"
+        _, qr = request(client, f"/api/academies/{ACADEMY}/attendance-qr", tokens["admin"], "POST", {"kind": "STAFF", "branchId": BRANCH})
+        staff = request(client, "/api/attendance-qr/redeem", tokens["admin"], "POST", {"token": qr["token"]})
+        again = request(client, "/api/attendance-qr/redeem", tokens["admin"], "POST", {"token": qr["token"]})
+        assert staff[0] == 200 and again[0] == 200 and staff[1]["id"] == again[1]["id"]

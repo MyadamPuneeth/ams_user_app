@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .auth import Identity
 from .database import Database
 from .errors import ApiError
-from .schemas import AcademyInput, BranchInput, InvitationInput, MemberInput, Role
+from .schemas import AcademyInput, AthleteInput, AttendanceInput, BranchInput, GuardianLinkInput, InvitationInput, MemberInput, QrInput, Role, SessionInput
 
 def row(result):
     value = result.mappings().first()
@@ -176,3 +176,88 @@ class AcademyService:
         async with self.db.as_actor(actor, academy_id) as session:
             await self.member(session, actor, academy_id, True)
             return rows(await session.execute(text('SELECT id, action, detail, "createdAt" FROM "Audit" WHERE "academyId"=:academy ORDER BY "createdAt" DESC LIMIT 50'), {"academy": academy_id}))
+
+    async def athletes(self, actor: Identity, academy_id: UUID):
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id)
+            return rows(await session.execute(text('SELECT id, name, "membershipId", active FROM "Athlete" WHERE "academyId"=:academy AND active ORDER BY name'), {"academy": academy_id}))
+
+    async def create_athlete(self, actor: Identity, academy_id: UUID, input: AthleteInput):
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id, True)
+            value = row(await session.execute(text('INSERT INTO "Athlete" ("academyId", name, "membershipId") VALUES (:academy, :name, :membership) RETURNING id, name, "membershipId", active'), {"academy": academy_id, "name": input.name, "membership": input.membershipId}))
+            await self.audit(session, actor, academy_id, "athlete.created", f"Added {value['name']}")
+            return value
+
+    async def link_guardian(self, actor: Identity, academy_id: UUID, input: GuardianLinkInput):
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id, True)
+            guardian = row(await session.execute(text('SELECT id, roles FROM "Membership" WHERE id=:id AND "academyId"=:academy'), {"id": input.guardianMembershipId, "academy": academy_id}))
+            if not guardian or "GUARDIAN" not in guardian["roles"]: raise ApiError(400, "Choose a guardian membership from this academy.")
+            if not await session.scalar(text('SELECT 1 FROM "Athlete" WHERE id=:athlete AND "academyId"=:academy'), {"athlete": input.athleteId, "academy": academy_id}): raise ApiError(404, "Athlete not found.")
+            await session.execute(text('INSERT INTO "GuardianAthlete" ("academyId", "guardianMembershipId", "athleteId") VALUES (:academy,:guardian,:athlete) ON CONFLICT DO NOTHING'), {"academy": academy_id, "guardian": input.guardianMembershipId, "athlete": input.athleteId})
+            await self.audit(session, actor, academy_id, "guardian.linked", "Linked guardian to athlete")
+
+    async def sessions(self, actor: Identity, academy_id: UUID):
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id)
+            return rows(await session.execute(text('SELECT id, "branchId", "coachMembershipId", title, "startsAt", "endsAt", status FROM "TrainingSession" WHERE "academyId"=:academy ORDER BY "startsAt" DESC LIMIT 100'), {"academy": academy_id}))
+
+    async def create_session(self, actor: Identity, academy_id: UUID, input: SessionInput):
+        if input.endsAt <= input.startsAt: raise ApiError(400, "The session must end after it starts.")
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id, True)
+            value = row(await session.execute(text("INSERT INTO \"TrainingSession\" (\"academyId\",\"branchId\",\"coachMembershipId\",title,\"startsAt\",\"endsAt\",status) VALUES (:academy,:branch,:coach,:title,:starts,:ends,'OPEN') RETURNING id,\"branchId\",\"coachMembershipId\",title,\"startsAt\",\"endsAt\",status"), {"academy": academy_id, "branch": input.branchId, "coach": input.coachMembershipId, "title": input.title, "starts": input.startsAt, "ends": input.endsAt}))
+            await self.audit(session, actor, academy_id, "session.created", f"Created {value['title']}")
+            return value
+
+    async def add_roster(self, actor: Identity, academy_id: UUID, session_id: UUID, athlete_id: UUID):
+        async with self.db.as_actor(actor, academy_id) as session:
+            await self.member(session, actor, academy_id, True)
+            await session.execute(text('INSERT INTO "SessionRoster" ("academyId","sessionId","athleteId") VALUES (:academy,:session,:athlete) ON CONFLICT DO NOTHING'), {"academy": academy_id, "session": session_id, "athlete": athlete_id})
+            await self.audit(session, actor, academy_id, "session.roster.updated", "Added athlete to session roster")
+
+    async def mark_attendance(self, actor: Identity, academy_id: UUID, session_id: UUID, athlete_id: UUID, input: AttendanceInput, source: str):
+        async with self.db.as_actor(actor, academy_id) as session:
+            member = await self.member(session, actor, academy_id)
+            assigned = await session.scalar(text('SELECT 1 FROM "TrainingSession" WHERE id=:session AND "academyId"=:academy AND ("coachMembershipId"=:membership OR :admin)'), {"session": session_id, "academy": academy_id, "membership": member["id"], "admin": "ADMIN" in member["roles"]})
+            if not assigned and source != "QR": raise ApiError(403, "You are not assigned to this session.")
+            if source == "QR" and not await session.scalar(text("SELECT 1 FROM \"TrainingSession\" WHERE id=:session AND status='OPEN'"), {"session": session_id}): raise ApiError(409, "Session check-in is not open.")
+            if not await session.scalar(text('SELECT 1 FROM "SessionRoster" WHERE "sessionId"=:session AND "athleteId"=:athlete AND "academyId"=:academy'), {"session": session_id, "athlete": athlete_id, "academy": academy_id}): raise ApiError(404, "Athlete is not on this session roster.")
+            existing = row(await session.execute(text('SELECT id, status FROM "AthleteAttendance" WHERE "sessionId"=:session AND "athleteId"=:athlete'), {"session": session_id, "athlete": athlete_id}))
+            if existing and source == "QR": return row(await session.execute(text('SELECT id,"sessionId","athleteId",status,source,"checkedAt" FROM "AthleteAttendance" WHERE id=:id'), {"id": existing["id"]}))
+            value = row(await session.execute(text('INSERT INTO "AthleteAttendance" ("academyId","sessionId","athleteId",status,source,"actorId","correctionReason") VALUES (:academy,:session,:athlete,CAST(:status AS "AttendanceStatus"),:source,:actor,:reason) ON CONFLICT ("sessionId","athleteId") DO UPDATE SET status=EXCLUDED.status, source=EXCLUDED.source, "actorId"=EXCLUDED."actorId", "correctionReason"=EXCLUDED."correctionReason", "updatedAt"=now() RETURNING id,"sessionId","athleteId",status,source,"checkedAt"'), {"academy": academy_id, "session": session_id, "athlete": athlete_id, "status": input.status, "source": source, "actor": actor.id, "reason": input.correctionReason}))
+            await self.audit(session, actor, academy_id, "attendance.marked", f"Recorded {input.status} attendance")
+            return value
+
+    async def create_qr(self, actor: Identity, academy_id: UUID, input: QrInput):
+        if (input.kind == "SESSION") != bool(input.sessionId): raise ApiError(400, "Session QR codes require a session; staff QR codes do not.")
+        async with self.db.as_actor(actor, academy_id) as session:
+            member = await self.member(session, actor, academy_id)
+            if input.kind == "SESSION" and "ADMIN" not in member["roles"]:
+                allowed = await session.scalar(text('SELECT 1 FROM "TrainingSession" WHERE id=:session AND "academyId"=:academy AND "coachMembershipId"=:member'), {"session": input.sessionId, "academy": academy_id, "member": member["id"]})
+                if not allowed: raise ApiError(403, "You are not assigned to this session.")
+            token = token_hex(32); expires = datetime.now(timezone.utc) + timedelta(minutes=2)
+            await session.execute(text('INSERT INTO "AttendanceQr" ("academyId",kind,"branchId","sessionId","tokenHash","expiresAt","createdBy") VALUES (:academy,CAST(:kind AS "QrKind"),:branch,:session,:hash,:expires,:actor)'), {"academy": academy_id, "kind": input.kind, "branch": input.branchId, "session": input.sessionId, "hash": hashlib.sha256(token.encode()).hexdigest(), "expires": expires, "actor": actor.id})
+            origin = os.getenv("MOBILE_APP_ORIGIN", "http://localhost:5175")
+            return {"token": token, "url": f"{origin}/check-in#{token}", "expiresAt": expires}
+
+    async def redeem_qr(self, actor: Identity, input):
+        digest = hashlib.sha256(input.token.encode()).hexdigest()
+        async with self.db.as_actor(actor) as session:
+            qr = row(await session.execute(text('SELECT id,"academyId",kind,"branchId","sessionId" FROM "AttendanceQr" WHERE "tokenHash"=:hash AND NOT closed AND "expiresAt">now()'), {"hash": digest}))
+            if not qr: raise ApiError(400, "This check-in code has expired or is unavailable.")
+            await session.execute(text("SELECT set_config('app.academy', :academy, true)"), {"academy": str(qr["academyId"])})
+            membership = row(await session.execute(text('SELECT id, roles FROM "Membership" WHERE "academyId"=:academy AND "userId"=:actor AND active'), {"academy": qr["academyId"], "actor": actor.id}))
+            if not membership: raise ApiError(403, "You do not belong to this academy.")
+            if qr["kind"] == "STAFF":
+                if not set(membership["roles"]) & {"ADMIN", "COACH", "FINANCE", "SCORER"}: raise ApiError(403, "This code is for academy staff.")
+                local_date = await session.scalar(text("SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date"))
+                value = row(await session.execute(text('INSERT INTO "StaffAttendance" ("academyId","membershipId","branchId","localDate",source,"actorId") VALUES (:academy,:member,:branch,:date,\'QR\',:actor) ON CONFLICT ("academyId","membershipId","localDate") DO UPDATE SET "updatedAt"=now() RETURNING id,"membershipId","branchId","localDate",status,source,"checkedAt"'), {"academy": qr["academyId"], "member": membership["id"], "branch": qr["branchId"], "date": local_date, "actor": actor.id}))
+                await self.audit(session, actor, qr["academyId"], "staff.attendance.checked_in", "Checked in via QR")
+                return value
+            athlete_id = input.athleteId
+            if not athlete_id: raise ApiError(400, "Select an athlete to check in.")
+            allowed = await session.scalar(text('SELECT 1 FROM "Athlete" a WHERE a.id=:athlete AND a."academyId"=:academy AND (a."membershipId"=:member OR EXISTS (SELECT 1 FROM "GuardianAthlete" g WHERE g."athleteId"=a.id AND g."guardianMembershipId"=:member))'), {"athlete": athlete_id, "academy": qr["academyId"], "member": membership["id"]})
+            if not allowed: raise ApiError(403, "You cannot check in this athlete.")
+            return await self.mark_attendance(actor, qr["academyId"], qr["sessionId"], athlete_id, AttendanceInput(status="PRESENT"), "QR")

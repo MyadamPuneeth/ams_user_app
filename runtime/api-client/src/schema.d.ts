@@ -240,6 +240,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/academies/{academy_id}/athletes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Athletes */
+        get: operations["athletes_api_academies__academy_id__athletes_get"];
+        put?: never;
+        /** Create Athlete */
+        post: operations["create_athlete_api_academies__academy_id__athletes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/academies/{academy_id}/guardian-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Guardian Link */
+        post: operations["guardian_link_api_academies__academy_id__guardian_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/academies/{academy_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sessions */
+        get: operations["sessions_api_academies__academy_id__sessions_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_academies__academy_id__sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/academies/{academy_id}/sessions/{session_id}/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Roster */
+        post: operations["add_roster_api_academies__academy_id__sessions__session_id__roster_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/academies/{academy_id}/sessions/{session_id}/attendance/{athlete_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark Attendance */
+        put: operations["mark_attendance_api_academies__academy_id__sessions__session_id__attendance__athlete_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/academies/{academy_id}/attendance-qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Qr */
+        post: operations["create_qr_api_academies__academy_id__attendance_qr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/attendance-qr/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redeem Qr */
+        post: operations["redeem_qr_api_attendance_qr_redeem_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -319,6 +440,61 @@ export interface components {
         ActiveInput: {
             /** Active */
             active: boolean;
+        };
+        /** AthleteDto */
+        AthleteDto: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Membershipid */
+            membershipId: string | null;
+            /** Active */
+            active: boolean;
+        };
+        /** AthleteInput */
+        AthleteInput: {
+            /** Name */
+            name: string;
+            /** Membershipid */
+            membershipId?: string | null;
+        };
+        /** AttendanceDto */
+        AttendanceDto: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Athleteid */
+            athleteId?: string | null;
+            /** Membershipid */
+            membershipId?: string | null;
+            /** Branchid */
+            branchId?: string | null;
+            /** Localdate */
+            localDate?: string | null;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /**
+             * Checkedat
+             * Format: date-time
+             */
+            checkedAt: string;
+        };
+        /** AttendanceInput */
+        AttendanceInput: {
+            /** Status */
+            status: string;
+            /** Correctionreason */
+            correctionReason?: string | null;
         };
         /** AuditDto */
         AuditDto: {
@@ -401,6 +577,19 @@ export interface components {
             email: string;
             /** Label */
             label: string;
+        };
+        /** GuardianLinkInput */
+        GuardianLinkInput: {
+            /**
+             * Guardianmembershipid
+             * Format: uuid
+             */
+            guardianMembershipId: string;
+            /**
+             * Athleteid
+             * Format: uuid
+             */
+            athleteId: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -508,11 +697,101 @@ export interface components {
             /** Active */
             active: boolean;
         };
+        /** QrDto */
+        QrDto: {
+            /** Token */
+            token: string;
+            /** Url */
+            url: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+        };
+        /** QrInput */
+        QrInput: {
+            /** Kind */
+            kind: string;
+            /**
+             * Branchid
+             * Format: uuid
+             */
+            branchId: string;
+            /** Sessionid */
+            sessionId?: string | null;
+        };
+        /** RedeemQrInput */
+        RedeemQrInput: {
+            /** Token */
+            token: string;
+            /** Athleteid */
+            athleteId?: string | null;
+        };
         /**
          * Role
          * @enum {string}
          */
         Role: "ADMIN" | "COACH" | "FINANCE" | "SCORER" | "ATHLETE" | "GUARDIAN";
+        /** RosterInput */
+        RosterInput: {
+            /**
+             * Athleteid
+             * Format: uuid
+             */
+            athleteId: string;
+        };
+        /** SessionDto */
+        SessionDto: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Branchid
+             * Format: uuid
+             */
+            branchId: string;
+            /** Coachmembershipid */
+            coachMembershipId: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Startsat
+             * Format: date-time
+             */
+            startsAt: string;
+            /**
+             * Endsat
+             * Format: date-time
+             */
+            endsAt: string;
+            /** Status */
+            status: string;
+        };
+        /** SessionInput */
+        SessionInput: {
+            /**
+             * Branchid
+             * Format: uuid
+             */
+            branchId: string;
+            /** Coachmembershipid */
+            coachMembershipId?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Startsat
+             * Format: date-time
+             */
+            startsAt: string;
+            /**
+             * Endsat
+             * Format: date-time
+             */
+            endsAt: string;
+        };
         /** TableDto */
         TableDto: {
             /**
@@ -1064,6 +1343,310 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditDto"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    athletes_api_academies__academy_id__athletes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AthleteDto"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_athlete_api_academies__academy_id__athletes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AthleteInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AthleteDto"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    guardian_link_api_academies__academy_id__guardian_links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianLinkInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sessions_api_academies__academy_id__sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDto"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_api_academies__academy_id__sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDto"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_roster_api_academies__academy_id__sessions__session_id__roster_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_attendance_api_academies__academy_id__sessions__session_id__attendance__athlete_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+                session_id: string;
+                athlete_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceDto"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_qr_api_academies__academy_id__attendance_qr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                academy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QrInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QrDto"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_qr_api_attendance_qr_redeem_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemQrInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceDto"];
                 };
             };
             /** @description Validation Error */

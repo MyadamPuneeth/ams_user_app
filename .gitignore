@@ -4,6 +4,9 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.local-postgres.example
+# Local recovery snapshot created while relocating this application.
+.relocation/
 coverage/
 playwright-report/
 test-results/
