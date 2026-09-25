@@ -5,7 +5,6 @@ import { dirname, relative, resolve } from 'node:path';
 const appRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const source = resolve(appRoot, 'runtime'); const peers = ['mobile-app', 'super-admin-app'].map(name => resolve(dirname(appRoot), name, 'runtime'));
 const ignore = new Set(['.venv', '__pycache__', '.pytest_cache', 'node_modules', '.local', 'dist', '.env', '.git']);
-// Sibling portals receive generated copies so the runtime stays identical without symlinks.
 function digest(root, dir = root, result = new Map()) { for (const entry of readdirSync(dir, { withFileTypes: true })) { if (ignore.has(entry.name)) continue; const path = resolve(dir, entry.name); if (entry.isDirectory()) digest(root, path, result); else result.set(relative(root, path).replaceAll('\\', '/'), createHash('sha256').update(readFileSync(path)).digest('hex')); } return result; }
 for (const peer of peers) {
   if (!existsSync(dirname(peer))) throw new Error(`Missing sibling application: ${dirname(peer)}`);
