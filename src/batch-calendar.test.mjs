@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import { addDays, batchWithAthlete, monthDates, occursOn, shiftMonth, slotTimes, timeMinutes, todayInZone, weekDates } from './batch-calendar.ts';
+
+assert.deepEqual(weekDates('2026-10-02'), ['2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03']);
+assert.deepEqual(weekDates('2026-10-03'), weekDates('2026-10-02'));
+assert.equal(weekDates('2026-10-04')[0], '2026-10-04');
+assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+assert.equal(monthDates('2026-09-01')[0], '2026-08-30');
+assert.equal(monthDates('2026-09-01')[41], '2026-10-10');
+assert.equal(shiftMonth('2026-12-01', 1), '2027-01-01');
+assert.equal(todayInZone('Asia/Kolkata', new Date('2026-10-01T19:00:00Z')), '2026-10-02');
+const weekly = { recurrence: 'WEEKLY', oneOffDate: null, weekdays: [0, 2], startsOn: '2026-10-01', endsOn: '2026-10-31' };
+assert.equal(occursOn(weekly, '2026-09-30'), false);
+assert.equal(occursOn(weekly, '2026-10-05'), true);
+assert.equal(occursOn(weekly, '2026-11-02'), false);
+assert.equal(occursOn({ ...weekly, recurrence: 'ONCE', oneOffDate: '2026-10-02' }, '2026-10-09'), false);
+assert.equal(occursOn({ ...weekly, recurrence: 'ONCE', oneOffDate: '2026-10-02' }, '2026-10-02'), true);
+assert.equal(timeMinutes('05:30:00'), 330);
+const batch = { name: 'Morning', branchId: 'branch', tableId: 'table', recurrence: 'WEEKLY', oneOffDate: null, weekdays: [0], startsOn: '2026-10-01', endsOn: null, startTime: '05:00:00', endTime: '06:00:00', coachIds: [], athleteIds: ['first'], active: true };
+assert.deepEqual(batchWithAthlete(batch, 'second').athleteIds, ['first', 'second']);
+assert.deepEqual(batchWithAthlete(batch, 'first').athleteIds, ['first']);
+assert.equal(batchWithAthlete(batch, 'second').startTime, batch.startTime);
+assert.deepEqual(slotTimes(25), { startTime: '12:30', endTime: '13:30' });
+assert.deepEqual(slotTimes(47), { startTime: '23:30', endTime: '23:59' });

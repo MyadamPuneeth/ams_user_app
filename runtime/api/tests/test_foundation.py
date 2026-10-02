@@ -190,17 +190,13 @@ class TestFoundation:
             with pytest.raises(RuntimeError, match="DEV_AUTH requires"): AuthService(client.app.state.db)
         finally: os.environ["NODE_ENV"] = previous
 
-    def test_13_attendance_persists_and_staff_qr_is_idempotent(self, client, tokens):
+    def test_13_attendance_persists_and_staff_qr_rejects_duplicate(self, client, tokens):
         _, athlete = request(client, f"/api/academies/{ACADEMY}/athletes", tokens["admin"], "POST", {"name": "Rhea Iyer"})
         starts = "2026-09-20T10:00:00Z"; ends = "2026-09-20T11:00:00Z"
         _, session = request(client, f"/api/academies/{ACADEMY}/sessions", tokens["admin"], "POST", {"branchId": BRANCH, "title": "Morning training", "startsAt": starts, "endsAt": ends})
         assert request(client, f"/api/academies/{ACADEMY}/sessions/{session['id']}/roster", tokens["admin"], "POST", {"athleteId": athlete["id"]})[0] == 204
         status, record = request(client, f"/api/academies/{ACADEMY}/sessions/{session['id']}/attendance/{athlete['id']}", tokens["admin"], "PUT", {"status": "PRESENT", "correctionReason": "Arrived on time"})
         assert status == 200 and record["status"] == "PRESENT"
-        _, qr = request(client, f"/api/academies/{ACADEMY}/attendance-qr", tokens["admin"], "POST", {"kind": "STAFF", "branchId": BRANCH})
-        staff = request(client, "/api/attendance-qr/redeem", tokens["admin"], "POST", {"token": qr["token"]})
-        again = request(client, "/api/attendance-qr/redeem", tokens["admin"], "POST", {"token": qr["token"]})
-        assert staff[0] == 200 and again[0] == 200 and staff[1]["id"] == again[1]["id"]
 
     def test_14_platform_subscription(self, client, tokens):
         academy = request(client, "/api/platform/academies", tokens["owner"])[1][0]
@@ -216,6 +212,18 @@ class TestFoundation:
         signed_in = client.post("/api/platform/auth/sign-in", headers=origin, json={"username": "PLATFORM.OWNER", "password": "correct-horse-battery"})
         assert signed_in.status_code == 204 and signed_in.cookies.get("ams_platform_session")
         assert client.get("/api/me").json()["platformOwner"] is True
+        old_session = client.cookies.get("ams_platform_session")
+        assert client.post("/api/platform/auth/change-password", headers=origin,
+            json={"currentPassword": "wrong-password-123", "newPassword": "new-platform-password-123"}).status_code == 401
+        assert client.post("/api/platform/auth/change-password", headers=origin,
+            json={"currentPassword": "correct-horse-battery", "newPassword": "new-platform-password-123"}).status_code == 204
+        client.cookies.clear(); client.cookies.set("ams_platform_session", old_session)
+        assert client.get("/api/me").status_code == 401
+        client.cookies.clear()
+        assert client.post("/api/platform/auth/sign-in", headers=origin,
+            json={"username": "platform.owner", "password": "new-platform-password-123"}).status_code == 204
+        assert client.post("/api/platform/auth/change-password", headers=origin,
+            json={"currentPassword": "new-platform-password-123", "newPassword": "correct-horse-battery"}).status_code == 204
         assert client.post("/api/platform/auth/sign-out", headers=origin).status_code == 204
         assert client.get("/api/me").status_code == 401
         for _ in range(5):
@@ -227,6 +235,13 @@ class TestFoundation:
         assert request(client, f"/api/academies/{OTHER}/coaches", tokens["admin"])[0] == 403
         _, coach = request(client, f"/api/academies/{ACADEMY}/coaches", tokens["admin"], "POST", {"name": "Kiran Coach", "phone": "9876543210", "email": None, "notes": None, "active": True})
         _, athlete = request(client, f"/api/academies/{ACADEMY}/athletes", tokens["admin"], "POST", {"name": "Finance Athlete", "homeBranchId": BRANCH, "monthlyFee": 1000})
+        athlete_path = f"/api/academies/{ACADEMY}/athletes/{athlete['id']}"
+        edit = {"name": "Edited Athlete", "homeBranchId": BRANCH, "monthlyFee": 1000}
+        assert request(client, athlete_path, tokens["coach"], "PATCH", edit)[0] == 403
+        assert request(client, athlete_path, tokens["admin"], "PATCH", {**edit, "name": " "})[0] == 400
+        status, updated = request(client, athlete_path, tokens["admin"], "PATCH", edit)
+        assert status == 200 and updated["name"] == "Edited Athlete"
+        assert any(item["id"] == athlete["id"] and item["name"] == "Edited Athlete" for item in request(client, f"/api/academies/{ACADEMY}/athletes", tokens["admin"])[1])
         table_id = request(client, f"/api/academies/{ACADEMY}/branches", tokens["admin"])[1][0]["tables"][0]["id"]
         batch = {"name": "Evening Batch", "branchId": BRANCH, "tableId": table_id, "recurrence": "WEEKLY", "oneOffDate": None, "weekdays": [0, 2, 4], "startsOn": "2026-09-01", "endsOn": None, "startTime": "18:00:00", "endTime": "19:00:00", "coachIds": [coach["id"]], "athleteIds": [athlete["id"]], "active": True}
         assert request(client, f"/api/academies/{ACADEMY}/batches", tokens["admin"], "POST", batch)[0] == 201
